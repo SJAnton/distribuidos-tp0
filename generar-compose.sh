@@ -17,6 +17,8 @@ cat << EOF >> "$filename"
       - LOGGING_LEVEL=DEBUG
     networks:
       - testing_net
+    volumes:
+      - ./server/config.ini:/config.ini
 EOF
 
 echo >> "$filename"
@@ -36,6 +38,8 @@ cat << EOF >> "$filename"
       - testing_net
     depends_on:
       - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
 EOF
 
 echo >> "$filename"
