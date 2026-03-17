@@ -1,50 +1,35 @@
 # TP0: Docker + Comunicaciones + Concurrencia
 
-## Ejercicio 2
+## Ejercicio 3
 ### Descripción
-Los cambios en el archivo de configuración se preservan mediante el uso de volumes. Para eso, se modificó el script que genera el archivo de configuración de Docker Compose, incluyendo ahora la declaración volume para el servidor y los clientes.
+La solución consiste en un script que envía un "Hello world!" al echo server haciendo uso de la red utilizada por los containers server y client para comunicarse.
 
-El resultado es que los archivos de configuración se montan dentro de los containers del servidor y los clientes, y no es necesario reconstruir la imagen al modificarlos.
+Este script crea un contenedor temporal que envía el mensaje mediante netcat y se elimina automáticamente.
 
 ### Ejecución
-El script recibe por parámetro el nombre del archivo de salida y el número de clientes a generar.
+El script se ejecuta con el comando
 
-`./generar-compose.sh <nombre_archivo> <n_clientes>`
+`./validar-echo-server.sh`
 
-### Ejemplo
-El archivo de configuración YAML de Docker Compose queda de la siguiente manera, con la declaración volumes indicando la ruta de los archivos a preservar y la ruta del volume montado dentro del container.
+La IP del servidor, el puerto y el nombre de la red pueden editarse, por defecto están como
 
 ```
-name: tp0
-services:
-  server:
-    container_name: server
-    image: server:latest
-    entrypoint: python3 /main.py
-    environment:
-      - PYTHONUNBUFFERED=1
-    networks:
-      - testing_net
-    volumes:
-      - ./server/config.ini:/config.ini
+server_ip=server
+server_port=12345
+network=tp0_testing_net
+```
 
-  client1:
-    container_name: client1
-    image: client:latest
-    entrypoint: /client
-    environment:
-      - CLI_ID=1
-    networks:
-      - testing_net
-    depends_on:
-      - server
-    volumes:
-      - ./client/config.yaml:/config.yaml
+### Ejemplo
+Se verifica el funcionamiento del servidor mediante el script creado. Si tiene éxito, se imprimirá el mensaje correspondiente.
 
-networks:
-  testing_net:
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.25.125.0/24
+```
+./validar-echo-server.sh
+action: test_echo_server | result: success
+```
+
+Si no fuera posible conectarse, el script imprimirá que falló al conectarse.
+
+```
+./validar-echo-server.sh
+action: test_echo_server | result: fail
 ```
