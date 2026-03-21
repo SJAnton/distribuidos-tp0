@@ -17,6 +17,83 @@ services:
     entrypoint: /client
     environment:
       - CLI_ID=1
+      - NOMBRE="Nombre1"
+      - APELLIDO="Apellido1"
+      - DOCUMENTO=30000001
+      - NACIMIENTO=1951-01-01
+      - NUMERO=5001
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+
+  client2:
+    container_name: client2
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=2
+      - NOMBRE="Nombre2"
+      - APELLIDO="Apellido2"
+      - DOCUMENTO=30000002
+      - NACIMIENTO=1952-01-01
+      - NUMERO=5002
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+
+  client3:
+    container_name: client3
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=3
+      - NOMBRE="Nombre3"
+      - APELLIDO="Apellido3"
+      - DOCUMENTO=30000003
+      - NACIMIENTO=1953-01-01
+      - NUMERO=5003
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+
+  client4:
+    container_name: client4
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=4
+      - NOMBRE="Nombre4"
+      - APELLIDO="Apellido4"
+      - DOCUMENTO=30000004
+      - NACIMIENTO=1954-01-01
+      - NUMERO=5004
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+
+  client5:
+    container_name: client5
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=5
+      - NOMBRE="Nombre5"
+      - APELLIDO="Apellido5"
+      - DOCUMENTO=30000005
+      - NACIMIENTO=1955-01-01
+      - NUMERO=5005
     networks:
       - testing_net
     depends_on:

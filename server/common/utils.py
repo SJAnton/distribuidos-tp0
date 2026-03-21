@@ -49,3 +49,16 @@ def load_bets() -> list[Bet]:
         for row in reader:
             yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
 
+'''
+Returns a Bet object made from its attributes passed as a list, that is
+[agency, first_name, last_name, document, birth_date, number]
+'''
+def construct_bet_from_list(bet_list: list[str]) -> Bet:
+    return Bet(
+        agency = bet_list[0],
+        first_name = bet_list[1],
+        last_name = bet_list[2],
+        document = bet_list[3],
+        birthdate = bet_list[4],
+        number = bet_list[5]
+    )

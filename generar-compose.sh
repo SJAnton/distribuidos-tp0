@@ -32,6 +32,11 @@ cat << EOF >> "$filename"
     entrypoint: /client
     environment:
       - CLI_ID=$i
+      - NOMBRE="Nombre$i"
+      - APELLIDO="Apellido$i"
+      - DOCUMENTO=$((30000000 + $i))
+      - NACIMIENTO=$((1950 + $i))-01-01
+      - NUMERO=$((5000 + $i))
     networks:
       - testing_net
     depends_on:
