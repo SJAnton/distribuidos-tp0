@@ -10,6 +10,8 @@ import (
 	"github.com/op/go-logging"
 )
 
+const batchSize = 8192
+
 var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
@@ -65,7 +67,7 @@ func (c *Client) StartClientLoop() {
 		log.Criticalf("action: read_csv_file | result: fail | error: %v", err)
 		return
 	}
-	batches := GetBatches(records, c.config)
+	batches := GetBatches(records, batchSize, c.config)
 	for i := 0; i < len(batches); i += 1 {
 		select {
 		case <-stop:

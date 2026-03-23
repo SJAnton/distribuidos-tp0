@@ -81,7 +81,7 @@ func (bet *Bet) MakeMessage() string {
 
 // Contructs a collection of batches from bets read
 // from a CSV file, passed as a parameter
-func GetBatches(records [][]string, config ClientConfig) []string {
+func GetBatches(records [][]string, batchSize int, config ClientConfig) []string {
 	var batches []string
 	var batch string
 	amount := 0
@@ -89,7 +89,7 @@ func GetBatches(records [][]string, config ClientConfig) []string {
 		bet := NewBetFromList(config.ID, record)
 		betMsg := bet.MakeMessage() + "\n"
 
-		if len(batch)+len(betMsg) > config.BatchMaxSize || amount == config.BatchMaxAmount {
+		if len(batch)+len(betMsg) > batchSize || amount == config.BatchMaxAmount {
 			batches = append(batches, strings.TrimSuffix(batch, "\n"))
 			batch = ""
 			amount = 0
