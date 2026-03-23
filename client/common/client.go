@@ -14,10 +14,11 @@ var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID            string
-	ServerAddress string
-	LoopAmount    int
-	LoopPeriod    time.Duration
+	ID             string
+	ServerAddress  string
+	LoopPeriod     time.Duration
+	BatchMaxAmount int
+	BatchMaxSize   int
 }
 
 // Client Entity that encapsulates how
@@ -59,16 +60,13 @@ func (c *Client) StartClientLoop() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	bet := NewBet(
-		c.config.ID,
-		os.Getenv("NOMBRE"),
-		os.Getenv("APELLIDO"),
-		os.Getenv("DOCUMENTO"),
-		os.Getenv("NACIMIENTO"),
-		os.Getenv("NUMERO"),
-	)
-
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
+	records, err := read_csv_file("./agency.csv")
+	if err != nil {
+		log.Criticalf("action: read_csv_file | result: fail | error: %v", err)
+		return
+	}
+	batches := GetBatches(records, c.config)
+	for i := 0; i < len(batches); i += 1 {
 		select {
 		case <-stop:
 			log.Infof("action: shutdown | result: success")
@@ -76,22 +74,16 @@ func (c *Client) StartClientLoop() {
 		default:
 			// Create the connection the server in every loop iteration. Send an
 			c.createClientSocket()
-			sendMessage(c.conn, []byte(bet.MakeMessage()))
+			sendMessage(c.conn, []byte(batches[i]))
 			msg, err := receiveMessage(c.conn)
 			c.conn.Close()
 
 			if err != nil || msg == "FAIL" {
-				log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
-					bet.Id,
-					bet.Number,
-				)
+				log.Errorf("action: apuesta_enviada | result: fail")
 				return
 			}
 
-			log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
-				bet.Id,
-				bet.Number,
-			)
+			log.Infof("action: apuesta_enviada | result: success")
 
 			// Wait a time between sending one message and the next one
 			time.Sleep(c.config.LoopPeriod)

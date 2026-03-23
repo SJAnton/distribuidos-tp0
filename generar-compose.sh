@@ -43,6 +43,7 @@ cat << EOF >> "$filename"
       - server
     volumes:
       - ./client/config.yaml:/config.yaml
+      - ./.data/agency-$i.csv:/agency.csv
 EOF
 
 echo >> "$filename"

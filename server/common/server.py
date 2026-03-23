@@ -48,16 +48,19 @@ class Server:
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
+        size = 0
         try:
             recv_msg = comms.receive_message(client_sock)
-            bet = utils.construct_bet_from_list(recv_msg.split("|"))
-            utils.store_bets([bet])
+            bets_str = recv_msg.split("\n")
+            size = len(bets_str)
+            bets = utils.list_to_bets(bets_str)
+            utils.store_bets(bets)
             logging.info(
-                f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}"
+                f"action: apuesta_recibida | result: success | cantidad: {size}"
             )
             comms.send_message(client_sock, "OK")
-        except OSError as e:
-            logging.error(f"action: receive_message | result: fail | error: {e}")
+        except Exception:
+            logging.error(f"action: apuesta_recibida | result: fail | cantidad: {size}")
             comms.send_message(client_sock, "FAIL")
         finally:
             try:

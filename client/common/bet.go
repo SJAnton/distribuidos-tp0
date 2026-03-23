@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // Bet entity containing its information
@@ -50,8 +51,22 @@ func NewBet(agencyStr string, name string, surname string, idStr string, dob str
 	return bet
 }
 
+// Bet constructor that uses an array made of its values
+func NewBetFromList(agencyStr string, betList []string) *Bet {
+	n := len(betList)
+	bet := NewBet(
+		agencyStr,
+		strings.Join(betList[0:n-4], " "),
+		betList[n-4],
+		betList[n-3],
+		betList[n-2],
+		betList[n-1],
+	)
+	return bet
+}
+
 // Constructs a message with the Bet's info as follows:
-// "msg_size|agency|name|surname|id|dob|number"
+// "agency|name|surname|id|dob|number"
 func (bet *Bet) MakeMessage() string {
 	return fmt.Sprintf(
 		"%d|%s|%s|%d|%s|%d",
@@ -62,4 +77,26 @@ func (bet *Bet) MakeMessage() string {
 		bet.Dob,
 		bet.Number,
 	)
+}
+
+// Contructs a collection of batches from bets read
+// from a CSV file, passed as a parameter
+func GetBatches(records [][]string, config ClientConfig) []string {
+	var batches []string
+	var batch string
+	amount := 0
+	for _, record := range records {
+		bet := NewBetFromList(config.ID, record)
+		betMsg := bet.MakeMessage() + "\n"
+
+		if len(batch)+len(betMsg) > config.BatchMaxSize || amount == config.BatchMaxAmount {
+			batches = append(batches, strings.TrimSuffix(batch, "\n"))
+			batch = ""
+			amount = 0
+		}
+		batch += betMsg
+		amount++
+	}
+	batches = append(batches, strings.TrimSuffix(batch, "\n"))
+	return batches
 }

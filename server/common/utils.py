@@ -62,3 +62,11 @@ def construct_bet_from_list(bet_list: list[str]) -> Bet:
         birthdate = bet_list[4],
         number = bet_list[5]
     )
+
+'''Takes a list of bets in string format and converts them into a list of Bet objects'''
+def list_to_bets(bets_str: list[str]) -> list[Bet]:
+    bets = []
+    for bet_str in bets_str:
+        bet = construct_bet_from_list(bet_str.split("|"))
+        bets.append(bet)
+    return bets
