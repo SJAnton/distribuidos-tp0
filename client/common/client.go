@@ -74,7 +74,7 @@ func (c *Client) StartClientLoop() {
 		log.Critical("action: get_batches | result: fail | error %v", err)
 	}
 
-	for i := 0; i < 3; /*len(batches)*/ i += 1 {
+	for i := 0; i < len(batches); i += 1 {
 		select {
 		case <-stop:
 			log.Infof("action: shutdown | result: success")

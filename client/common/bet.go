@@ -20,26 +20,14 @@ type Bet struct {
 func NewBet(agencyStr string, name string, surname string, idStr string, dob string, numberStr string) (*Bet, error) {
 	agency, agency_err := strconv.Atoi(agencyStr)
 	if agency_err != nil {
-		log.Criticalf(
-			"action: agencyStr_to_int | result: fail | error: %v",
-			agency_err,
-		)
 		return nil, agency_err
 	}
 	id, id_err := strconv.Atoi(idStr)
 	if id_err != nil {
-		log.Criticalf(
-			"action: idStr_to_int | result: fail | error: %v",
-			id_err,
-		)
 		return nil, id_err
 	}
 	number, number_err := strconv.Atoi(numberStr)
 	if number_err != nil {
-		log.Criticalf(
-			"action: numberStr_to_int | result: fail | error: %v",
-			number_err,
-		)
 		return nil, number_err
 	}
 
