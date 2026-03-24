@@ -70,3 +70,11 @@ def list_to_bets(bets_str: list[str]) -> list[Bet]:
         bet = construct_bet_from_list(bet_str.split("|"))
         bets.append(bet)
     return bets
+
+'''Returns a list with the winners from a given agency'''
+def get_winners(agency_id: int) -> list[int]:
+    winners = []
+    for bet in load_bets():
+        if bet.agency == agency_id and has_won(bet):
+            winners.append(bet.document)
+    return winners

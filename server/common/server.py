@@ -10,6 +10,9 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        self._known_agencies = set()
+        self._done_agencies = set()
+        self._done_draw = False
         self._is_running = True
 
     def run(self):
@@ -51,14 +54,32 @@ class Server:
         size = 0
         try:
             recv_msg = comms.receive_message(client_sock)
-            bets_str = recv_msg.split("\n")
-            size = len(bets_str)
-            bets = utils.list_to_bets(bets_str)
-            utils.store_bets(bets)
-            logging.info(
-                f"action: apuesta_recibida | result: success | cantidad: {size}"
-            )
-            comms.send_message(client_sock, "OK")
+            if recv_msg.endswith("DONE"):
+                agency_id = recv_msg.split("|")[0]
+                self._done_agencies.add(int(agency_id))
+                if self._done_agencies == self._known_agencies:
+                    self._done_draw = True
+                    logging.info("action: sorteo | result: success")
+
+            elif recv_msg.endswith("RESULTS"):
+                if not self._done_draw:
+                    comms.send_message(client_sock, "WAIT")
+                    return
+                agency_id = recv_msg.split("|")[0]
+                winners = utils.get_winners(int(agency_id))
+                comms.send_message(client_sock, "|".join(str(x) for x in winners))
+                
+            else:
+                bets_str = recv_msg.split("\n")
+                size = len(bets_str)
+                bets = utils.list_to_bets(bets_str)
+                utils.store_bets(bets)
+                agency_id = bets_str[0].split("|")[0]
+                self._known_agencies.add(int(agency_id))
+                logging.info(
+                    f"action: apuesta_recibida | result: success | cantidad: {size}"
+                )
+                comms.send_message(client_sock, "OK")
         except Exception:
             logging.error(f"action: apuesta_recibida | result: fail | cantidad: {size}")
             comms.send_message(client_sock, "FAIL")

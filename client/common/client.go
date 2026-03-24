@@ -1,9 +1,11 @@
 package common
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -67,8 +69,12 @@ func (c *Client) StartClientLoop() {
 		log.Criticalf("action: read_csv_file | result: fail | error: %v", err)
 		return
 	}
-	batches := GetBatches(records, batchSize, c.config)
-	for i := 0; i < len(batches); i += 1 {
+	batches, err := GetBatches(records, batchSize, c.config)
+	if err != nil {
+		log.Critical("action: get_batches | result: fail | error %v", err)
+	}
+
+	for i := 0; i < 3; /*len(batches)*/ i += 1 {
 		select {
 		case <-stop:
 			log.Infof("action: shutdown | result: success")
@@ -92,5 +98,39 @@ func (c *Client) StartClientLoop() {
 
 		}
 	}
+	winners, err := c.startPollLoop()
+
+	if err != nil {
+		log.Errorf("action: consulta_ganadores | result: fail | error: %v", err)
+		return
+	}
+	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %v", winners)
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
+}
+
+func (c *Client) startPollLoop() (int, error) {
+	c.createClientSocket()
+	doneMsg := fmt.Sprintf("%v|DONE", c.config.ID)
+	sendMessage(c.conn, []byte(doneMsg))
+	c.conn.Close()
+
+	resultsMsg := fmt.Sprintf("%v|RESULTS", c.config.ID)
+	for {
+		c.createClientSocket()
+		sendMessage(c.conn, []byte(resultsMsg))
+		msg, err := receiveMessage(c.conn)
+		c.conn.Close()
+
+		if err != nil {
+			return 0, err
+		}
+
+		if msg == "WAIT" {
+			time.Sleep(c.config.LoopPeriod)
+			continue
+		} else if msg == "" {
+			return 0, nil
+		}
+		return len(strings.Split(msg, "|")), nil
+	}
 }

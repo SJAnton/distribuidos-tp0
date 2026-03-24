@@ -17,13 +17,14 @@ type Bet struct {
 }
 
 // Returns a Bet object made from the parameters passed
-func NewBet(agencyStr string, name string, surname string, idStr string, dob string, numberStr string) *Bet {
+func NewBet(agencyStr string, name string, surname string, idStr string, dob string, numberStr string) (*Bet, error) {
 	agency, agency_err := strconv.Atoi(agencyStr)
 	if agency_err != nil {
 		log.Criticalf(
 			"action: agencyStr_to_int | result: fail | error: %v",
 			agency_err,
 		)
+		return nil, agency_err
 	}
 	id, id_err := strconv.Atoi(idStr)
 	if id_err != nil {
@@ -31,6 +32,7 @@ func NewBet(agencyStr string, name string, surname string, idStr string, dob str
 			"action: idStr_to_int | result: fail | error: %v",
 			id_err,
 		)
+		return nil, id_err
 	}
 	number, number_err := strconv.Atoi(numberStr)
 	if number_err != nil {
@@ -38,6 +40,7 @@ func NewBet(agencyStr string, name string, surname string, idStr string, dob str
 			"action: numberStr_to_int | result: fail | error: %v",
 			number_err,
 		)
+		return nil, number_err
 	}
 
 	bet := &Bet{
@@ -48,13 +51,13 @@ func NewBet(agencyStr string, name string, surname string, idStr string, dob str
 		Dob:     dob,
 		Number:  number,
 	}
-	return bet
+	return bet, nil
 }
 
 // Bet constructor that uses an array made of its values
-func NewBetFromList(agencyStr string, betList []string) *Bet {
+func NewBetFromList(agencyStr string, betList []string) (*Bet, error) {
 	n := len(betList)
-	bet := NewBet(
+	bet, err := NewBet(
 		agencyStr,
 		strings.Join(betList[0:n-4], " "),
 		betList[n-4],
@@ -62,7 +65,7 @@ func NewBetFromList(agencyStr string, betList []string) *Bet {
 		betList[n-2],
 		betList[n-1],
 	)
-	return bet
+	return bet, err
 }
 
 // Constructs a message with the Bet's info as follows:
@@ -81,12 +84,16 @@ func (bet *Bet) MakeMessage() string {
 
 // Contructs a collection of batches from bets read
 // from a CSV file, passed as a parameter
-func GetBatches(records [][]string, batchSize int, config ClientConfig) []string {
+func GetBatches(records [][]string, batchSize int, config ClientConfig) ([]string, error) {
 	var batches []string
 	var batch string
 	amount := 0
 	for _, record := range records {
-		bet := NewBetFromList(config.ID, record)
+		bet, err := NewBetFromList(config.ID, record)
+
+		if err != nil {
+			return nil, err
+		}
 		betMsg := bet.MakeMessage() + "\n"
 
 		if len(batch)+len(betMsg) > batchSize || amount == config.BatchMaxAmount {
@@ -98,5 +105,5 @@ func GetBatches(records [][]string, batchSize int, config ClientConfig) []string
 		amount++
 	}
 	batches = append(batches, strings.TrimSuffix(batch, "\n"))
-	return batches
+	return batches, nil
 }
