@@ -1,30 +1,45 @@
 # TP0: Docker + Comunicaciones + Concurrencia
 
-## Ejercicio 7
+## Ejercicio 8
 ### Descripción
-En este ejercicio se implementa el sorteo de la lotería, por medio del envío de mensajes DONE y RESULTS de los clientes al servidor.
+En este ejercicio se modificó el servidor para aceptar conexiones de forma paralela, mediante el uso de threads. La sincronización se lleva a cabo por medio de un mutex, que bloquea el acceso a los recursos compartidos y a las funciones para cargar y guardar apuestas, que no son thread-safe.
 
-El mensaje DONE está compuesto por el número de la agencia y la palabra DONE, separado por un delimitador "|". 
+Cada conexión se lanza como un nuevo thread de la siguiente forma:
 
-`[agencia|DONE]`
+```
+threading.Thread(
+    target=self.__handle_client_connection,
+    args=(client_sock,)
+).start()
+```
 
-El servidor registra a las agencias activas a medida que recibe sus mensajes en batches, por lo que cuando recibe DONE de todas, hace el sorteo y determina a los ganadores, escribiendo en el log el mensaje
+Cuando el thread debe acceder a recursos compartidos, se utiliza el mutex para bloquear al resto de threads hasta que el thread que tiene el mutex termine su operación, por ejemplo:
 
-`action: sorteo | result: success`
+```
+with self._lock:
+    self._done_agencies.add(int(agency_id))
+    if self._done_agencies == self._known_agencies:
+        self._done_draw = True
+        logging.info("action: sorteo | result: success")
+```
 
-Para recibir a los ganadores, su agencia correspondiente  envía un mensaje RESULTS en el mismo formato que DONE, este es
+Tanto las funciones store_bets como load_bets, al no ser thread-safe, son protegidas mediante el mutex (la función load_bets es llamada dentro de get_winners).
 
-`[agencia|RESULTS]`
+```
+with self._lock:
+    if not self._done_draw:
+        comms.send_message(client_sock, "WAIT")
+        return
+    winners = utils.get_winners(int(agency_id))
+```
 
-Tras recibir el mensaje RESULTS, el servidor devuelve WAIT si todavía no recibió el mensaje DONE de todas las agencias, o los ganadores de la lotería correspondiente a esas agencias si recibió los DONE, según el formato
+```
+with self._lock:
+    utils.store_bets(bets)
+    self._known_agencies.add(int(agency_id))
+```
 
-`[documento_1|documento_2| ... |documento_n]`
-
-Tras lo cual el cliente imprime el mensaje de éxito
-
-`action: consulta_ganadores | result: success | cant_ganadores: ${CANT}`
-
-O el correspondiente mensaje de error si no fue posible.
+El uso de un mutex garantiza la exclusión mutua y evita la aparición de race conditions.
 
 ### Ejecución
 Se crean n clientes genéricos corriendo el script
@@ -43,143 +58,143 @@ Se abren los logs usando
 En el siguiente ejemplo se usan 5 clientes (agencias), y se modificó el código para finalizar con la tercera iteración, de forma tal que se vea el resultado del sorteo.
 
 ```
-client5  | 2026-03-24 21:24:37 INFO     action: config | result: success | client_id: 5 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
-client5  | 2026-03-24 21:24:37 INFO     action: apuesta_enviada | result: success
-client2  | 2026-03-24 21:24:37 INFO     action: config | result: success | client_id: 2 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
-client2  | 2026-03-24 21:24:37 INFO     action: apuesta_enviada | result: success
-client1  | 2026-03-24 21:24:36 INFO     action: config | result: success | client_id: 1 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
-client1  | 2026-03-24 21:24:37 INFO     action: apuesta_enviada | result: success
-client4  | 2026-03-24 21:24:37 INFO     action: config | result: success | client_id: 4 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
-client4  | 2026-03-24 21:24:37 INFO     action: apuesta_enviada | result: success
-client3  | 2026-03-24 21:24:37 INFO     action: config | result: success | client_id: 3 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
-client3  | 2026-03-24 21:24:37 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:36 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: success | ip: 172.25.125.3
-server   | 2026-03-24 21:24:37 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:37 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: success | ip: 172.25.125.4
-server   | 2026-03-24 21:24:37 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:37 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: success | ip: 172.25.125.5
-server   | 2026-03-24 21:24:37 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:37 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: success | ip: 172.25.125.6
-server   | 2026-03-24 21:24:37 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:37 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: success | ip: 172.25.125.7
-server   | 2026-03-24 21:24:37 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:37 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:37 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: success | ip: 172.25.125.3
-server   | 2026-03-24 21:24:42 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:42 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: in_progress
-client1  | 2026-03-24 21:24:42 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: success | ip: 172.25.125.4
-server   | 2026-03-24 21:24:42 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:42 INFO     action: close_client_socket | result: success
-client3  | 2026-03-24 21:24:42 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: success | ip: 172.25.125.5
-server   | 2026-03-24 21:24:42 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:42 INFO     action: close_client_socket | result: success
-client5  | 2026-03-24 21:24:42 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: success | ip: 172.25.125.6
-server   | 2026-03-24 21:24:42 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:42 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: in_progress
-client2  | 2026-03-24 21:24:42 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: success | ip: 172.25.125.7
-server   | 2026-03-24 21:24:42 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:42 INFO     action: close_client_socket | result: success
-client4  | 2026-03-24 21:24:42 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:42 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: success | ip: 172.25.125.3
-server   | 2026-03-24 21:24:47 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:47 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: in_progress
-client1  | 2026-03-24 21:24:47 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: success | ip: 172.25.125.4
-server   | 2026-03-24 21:24:47 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:47 INFO     action: close_client_socket | result: success
-client3  | 2026-03-24 21:24:47 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: success | ip: 172.25.125.5
-server   | 2026-03-24 21:24:47 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:47 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: in_progress
-client5  | 2026-03-24 21:24:47 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: success | ip: 172.25.125.6
-server   | 2026-03-24 21:24:47 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:47 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: in_progress
-client2  | 2026-03-24 21:24:47 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: success | ip: 172.25.125.7
-server   | 2026-03-24 21:24:47 INFO     action: apuesta_recibida | result: success | cantidad: 150
-server   | 2026-03-24 21:24:47 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:47 INFO     action: accept_connections | result: in_progress
-client4  | 2026-03-24 21:24:47 INFO     action: apuesta_enviada | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.3
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.3
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.4
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.4
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.5
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.5
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.6
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.6
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.7
-server   | 2026-03-24 21:24:52 INFO     action: sorteo | result: success
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: success | ip: 172.25.125.7
-server   | 2026-03-24 21:24:52 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:52 INFO     action: accept_connections | result: in_progress
-client4  | 2026-03-24 21:24:52 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
-client4  | 2026-03-24 21:24:52 INFO     action: loop_finished | result: success | client_id: 4
-client4 exited with code 0
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: success | ip: 172.25.125.3
-client1  | 2026-03-24 21:24:57 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
-client1  | 2026-03-24 21:24:57 INFO     action: loop_finished | result: success | client_id: 1
-server   | 2026-03-24 21:24:57 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: success | ip: 172.25.125.4
-server   | 2026-03-24 21:24:57 INFO     action: close_client_socket | result: success
-client3  | 2026-03-24 21:24:57 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
-client3  | 2026-03-24 21:24:57 INFO     action: loop_finished | result: success | client_id: 3
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: in_progress
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: success | ip: 172.25.125.5
-server   | 2026-03-24 21:24:57 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: in_progress
-client5  | 2026-03-24 21:24:57 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
-client5  | 2026-03-24 21:24:57 INFO     action: loop_finished | result: success | client_id: 5
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: success | ip: 172.25.125.6
-server   | 2026-03-24 21:24:57 INFO     action: close_client_socket | result: success
-server   | 2026-03-24 21:24:57 INFO     action: accept_connections | result: in_progress
-client2  | 2026-03-24 21:24:57 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
-client2  | 2026-03-24 21:24:57 INFO     action: loop_finished | result: success | client_id: 2
-client1 exited with code 0
+client3  | 2026-03-25 22:13:49 INFO     action: config | result: success | client_id: 3 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
+client3  | 2026-03-25 22:13:50 INFO     action: apuesta_enviada | result: success
+client4  | 2026-03-25 22:13:50 INFO     action: config | result: success | client_id: 4 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
+client4  | 2026-03-25 22:13:50 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:13:49 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:49 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2026-03-25 22:13:49 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:49 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:49 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: success | ip: 172.25.125.4
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:50 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:50 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: success | ip: 172.25.125.5
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: success | ip: 172.25.125.6
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:50 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:50 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:13:50 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:50 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: success | ip: 172.25.125.7
+server   | 2026-03-25 22:13:50 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:50 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:50 INFO     action: close_client_socket | result: success
+client5  | 2026-03-25 22:13:49 INFO     action: config | result: success | client_id: 5 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
+client5  | 2026-03-25 22:13:49 INFO     action: apuesta_enviada | result: success
+client1  | 2026-03-25 22:13:50 INFO     action: config | result: success | client_id: 1 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
+client1  | 2026-03-25 22:13:50 INFO     action: apuesta_enviada | result: success
+client2  | 2026-03-25 22:13:50 INFO     action: config | result: success | client_id: 2 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO
+client2  | 2026-03-25 22:13:50 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:55 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:55 INFO     action: close_client_socket | result: success
+client5  | 2026-03-25 22:13:55 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: success | ip: 172.25.125.4
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:55 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:55 INFO     action: close_client_socket | result: success
+client3  | 2026-03-25 22:13:55 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: success | ip: 172.25.125.5
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: success | ip: 172.25.125.6
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:55 INFO     action: apuesta_recibida | result: success | cantidad: 150
+client1  | 2026-03-25 22:13:55 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:13:55 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:55 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:13:55 INFO     action: close_client_socket | result: success
+client4  | 2026-03-25 22:13:55 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: success | ip: 172.25.125.7
+server   | 2026-03-25 22:13:55 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:13:55 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:13:55 INFO     action: close_client_socket | result: success
+client2  | 2026-03-25 22:13:55 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:00 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:14:00 INFO     action: close_client_socket | result: success
+client5  | 2026-03-25 22:14:00 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: success | ip: 172.25.125.4
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:00 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:14:00 INFO     action: close_client_socket | result: success
+client3  | 2026-03-25 22:14:00 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: success | ip: 172.25.125.6
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: success | ip: 172.25.125.5
+server   | 2026-03-25 22:14:00 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: in_progress
+client4  | 2026-03-25 22:14:00 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:14:00 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:00 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:14:00 INFO     action: close_client_socket | result: success
+client1  | 2026-03-25 22:14:00 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: success | ip: 172.25.125.7
+server   | 2026-03-25 22:14:00 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:00 INFO     action: apuesta_recibida | result: success | cantidad: 150
+server   | 2026-03-25 22:14:00 INFO     action: close_client_socket | result: success
+client2  | 2026-03-25 22:14:00 INFO     action: apuesta_enviada | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.4
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.4
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.6
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.5
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.6
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.5
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.7
+server   | 2026-03-25 22:14:05 INFO     action: sorteo | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: success | ip: 172.25.125.7
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+server   | 2026-03-25 22:14:05 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:05 INFO     action: close_client_socket | result: success
+client2  | 2026-03-25 22:14:05 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
+client2  | 2026-03-25 22:14:05 INFO     action: loop_finished | result: success | client_id: 2
+client2 exited with code 0
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:10 INFO     action: close_client_socket | result: success
+client5  | 2026-03-25 22:14:10 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
+client5  | 2026-03-25 22:14:10 INFO     action: loop_finished | result: success | client_id: 5
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: success | ip: 172.25.125.4
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:10 INFO     action: close_client_socket | result: success
+client3  | 2026-03-25 22:14:10 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
+client3  | 2026-03-25 22:14:10 INFO     action: loop_finished | result: success | client_id: 3
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: success | ip: 172.25.125.5
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: success | ip: 172.25.125.6
+server   | 2026-03-25 22:14:10 INFO     action: accept_connections | result: in_progress
+server   | 2026-03-25 22:14:10 INFO     action: close_client_socket | result: success
+client1  | 2026-03-25 22:14:10 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
+client1  | 2026-03-25 22:14:10 INFO     action: loop_finished | result: success | client_id: 1
+client4  | 2026-03-25 22:14:10 INFO     action: consulta_ganadores | result: success | cant_ganadores: 0
+client4  | 2026-03-25 22:14:10 INFO     action: loop_finished | result: success | client_id: 4
+server   | 2026-03-25 22:14:10 INFO     action: close_client_socket | result: success
 client5 exited with code 0
 client3 exited with code 0
-client2 exited with code 0
+client1 exited with code 0
+client4 exited with code 0
 ```
