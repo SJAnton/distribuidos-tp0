@@ -2,6 +2,7 @@ from common import comms, utils
 import signal
 import socket
 import logging
+import threading
 
 
 class Server:
@@ -10,6 +11,7 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        self._lock = threading.Lock()
         self._known_agencies = set()
         self._done_agencies = set()
         self._done_draw = False
@@ -27,7 +29,10 @@ class Server:
         while self._is_running:
             try:
                 client_sock = self.__accept_new_connection()
-                self.__handle_client_connection(client_sock)
+                threading.Thread(
+                    target=self.__handle_client_connection,
+                    args=(client_sock,)
+                ).start()
             except OSError as e:
                 if not self._is_running:
                     break
@@ -56,16 +61,18 @@ class Server:
             recv_msg = comms.receive_message(client_sock)
             if recv_msg.endswith("DONE"):
                 agency_id = recv_msg.split("|")[0]
-                self._done_agencies.add(int(agency_id))
-                if self._done_agencies == self._known_agencies:
-                    self._done_draw = True
-                    logging.info("action: sorteo | result: success")
+                with self._lock:
+                    self._done_agencies.add(int(agency_id))
+                    if self._done_agencies == self._known_agencies:
+                        self._done_draw = True
+                        logging.info("action: sorteo | result: success")
 
             elif recv_msg.endswith("RESULTS"):
-                if not self._done_draw:
-                    comms.send_message(client_sock, "WAIT")
-                    return
                 agency_id = recv_msg.split("|")[0]
+                with self._lock:
+                    if not self._done_draw:
+                        comms.send_message(client_sock, "WAIT")
+                        return
                 winners = utils.get_winners(int(agency_id))
                 comms.send_message(client_sock, "|".join(winners))
                 
@@ -75,7 +82,8 @@ class Server:
                 bets = utils.list_to_bets(bets_str)
                 utils.store_bets(bets)
                 agency_id = bets_str[0].split("|")[0]
-                self._known_agencies.add(int(agency_id))
+                with self._lock:
+                    self._known_agencies.add(int(agency_id))
                 logging.info(
                     f"action: apuesta_recibida | result: success | cantidad: {size}"
                 )
