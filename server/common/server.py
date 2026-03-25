@@ -73,16 +73,16 @@ class Server:
                     if not self._done_draw:
                         comms.send_message(client_sock, "WAIT")
                         return
-                winners = utils.get_winners(int(agency_id))
+                    winners = utils.get_winners(int(agency_id))
                 comms.send_message(client_sock, "|".join(winners))
                 
             else:
                 bets_str = recv_msg.split("\n")
                 size = len(bets_str)
                 bets = utils.list_to_bets(bets_str)
-                utils.store_bets(bets)
                 agency_id = bets_str[0].split("|")[0]
                 with self._lock:
+                    utils.store_bets(bets)
                     self._known_agencies.add(int(agency_id))
                 logging.info(
                     f"action: apuesta_recibida | result: success | cantidad: {size}"
