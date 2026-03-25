@@ -72,7 +72,7 @@ def list_to_bets(bets_str: list[str]) -> list[Bet]:
     return bets
 
 '''Returns a list with the winners from a given agency'''
-def get_winners(agency_id: int) -> list[int]:
+def get_winners(agency_id: int) -> list[str]:
     winners = []
     for bet in load_bets():
         if bet.agency == agency_id and has_won(bet):

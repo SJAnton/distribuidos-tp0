@@ -67,7 +67,7 @@ class Server:
                     return
                 agency_id = recv_msg.split("|")[0]
                 winners = utils.get_winners(int(agency_id))
-                comms.send_message(client_sock, "|".join(str(x) for x in winners))
+                comms.send_message(client_sock, "|".join(winners))
                 
             else:
                 bets_str = recv_msg.split("\n")
